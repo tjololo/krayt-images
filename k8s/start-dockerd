@@ -1,0 +1,51 @@
+#!/bin/sh
+# Starts the Docker daemon and blocks until it answers. Exits 0 once the daemon is usable, non-zero
+# if it never came up — so a caller can `start-dockerd || { ...; false; }` and fail the boot.
+#
+# This is split out of entrypoint.sh because under microsandbox the image's ENTRYPOINT is NOT the
+# guest's init: msb boots its own agentd as PID 1 (injected as init.krun) and execs the workload
+# through the agent protocol. So the thing that starts dockerd has to be callable from an msb
+# `scripts:` entry, an `init.cmd` handoff, or a plain container entrypoint alike. This script is
+# that one callable unit; entrypoint.sh is only the container-runtime path into it. See README.md.
+#
+# Idempotent and safe to call from more than one of those places: it is a no-op when a daemon is
+# already reachable, which also covers a socket bind-mounted in from the host.
+set -eu
+
+timeout=${DOCKERD_TIMEOUT:-30}
+log() { echo "[start-dockerd] $*" >&2; }
+
+if docker version >/dev/null 2>&1; then
+	log "a daemon is already reachable — nothing to do"
+	exit 0
+fi
+
+if [ "$(id -u)" != 0 ]; then
+	log "ERROR: dockerd needs root, but this is uid $(id -u)."
+	log "       Under msb, set \`user: root\` in the sandbox config (or --runtime-conf) for the"
+	log "       entry that calls this; the image's own USER is only the default."
+	exit 1
+fi
+
+log "starting dockerd..."
+dockerd >/var/log/dockerd.log 2>&1 &
+
+# Poll the socket rather than sleeping a fixed interval: a warm start answers in about a second, but
+# a first boot on an empty /var/lib/docker is slower, and a `kind create cluster` issued right after
+# this returns must not race it.
+i=0
+while [ "$i" -lt "$timeout" ] && ! docker version >/dev/null 2>&1; do
+	i=$((i + 1))
+	sleep 1
+done
+
+if ! docker version >/dev/null 2>&1; then
+	log "ERROR: dockerd did not come up within ${timeout}s. Last lines of /var/log/dockerd.log:"
+	tail -n 20 /var/log/dockerd.log >&2 || true
+	log "       Two usual causes: under msb the root disk is not flat, so overlay2 refuses to"
+	log "       stack on the sandbox's OverlayFS (use --root-disk flat:<size>); or under a"
+	log "       container runtime the container is not privileged."
+	exit 1
+fi
+
+log "dockerd is up (${i}s)"

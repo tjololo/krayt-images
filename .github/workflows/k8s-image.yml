@@ -1,0 +1,65 @@
+# Builds and publishes the k8s toolchain image (k8s/Dockerfile) to GHCR.
+#
+# `paths` keeps this to the image it owns: this repo holds several images, so an unrelated
+# Dockerfile or a README edit must not re-point the `latest` tag here. The workflow file itself is
+# in the list so a change to the build is exercised by that same push.
+name: k8s image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - k8s/**
+      - .github/workflows/k8s-image.yml
+  workflow_dispatch:
+
+concurrency:
+  # Serialize per branch: two pushes landing close together would otherwise race for `latest`, and
+  # the winner is whichever build finishes last, not whichever commit is newer.
+  group: k8s-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/tjololo/krayt-images/k8s
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io under this repository's namespace
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # The job's own GITHUB_TOKEN is enough for a package in this repo's namespace, given
+          # `packages: write` above — no PAT to store or rotate.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          # `prefix=` overrides the action's default `sha-`, so the tag is the bare 7-char sha.
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: k8s
+          file: k8s/Dockerfile
+          # amd64 only. The Dockerfile is arch-aware and builds for arm64 too, but under QEMU the
+          # `go install` layer takes tens of minutes; add linux/arm64 here (plus
+          # docker/setup-qemu-action, or an arm runner) when something actually needs it.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

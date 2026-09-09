@@ -1,0 +1,101 @@
+# krayt.yaml — tracked, shared dev config for dogfooding krayt on its own repo. Every krayt
+# contributor gets the same starting point: the known-good krayt-dev image, model/effort, this
+# repo's own network allowlist, and msb-substituted credentials for both credentials the repo's
+# tasks use (hand-secrets-to-msb.md).
+#
+# **Pass this file explicitly — it is no longer auto-loadable.** §8.3 refuses `network.mitm`,
+# `network.inject`, and `network.passthrough` from a `<repo>/krayt.yaml` a run picked up on its
+# own, because that file ships inside the repo the agent is about to edit and so may not write the
+# run's security policy:
+#
+#   krayt run --config krayt.yaml --task <file>
+#
+# A bare `krayt run --task <file>` now stops with an error naming `network.inject`. That error is
+# the opt-in working as designed, not a bug. Any flag still overrides the matching value here.
+#
+# Run it from the repo root: an explicit --config is honored in full, which includes leaving
+# `secrets: secrets.env` relative to the working directory rather than anchoring it to the repo
+# root the way an auto-loaded config's containment check does (§8.3).
+#
+# `secrets:` below only names a path — the file it points at (secrets.env) is gitignored and this
+# file carries no secret value. Per-task secrets belong only in that gitignored secrets.env (§6.8);
+# there is no placeholder to hand-write in `env:` any more — msb sets each declared secret's own
+# guest env var to its default placeholder itself the moment `network.inject` names it.
+# `task:` is intentionally omitted so you always pass --task per run.
+
+image: ghcr.io/418-cloud/krayt-dev:sha-cbca700
+secrets: secrets.env
+
+env:
+  CLAUDE_MODEL: claude-sonnet-5
+  CLAUDE_EFFORT: high
+  # Uncomment for a task that needs verbatim command output — a vendorHash `got: sha256-…`, a full
+  # test failure, a filesystem check the agent will branch on (hack/krayt-dev/README.md).
+  # KRAYT_RTK: off
+
+bundle_depth: 0 # full-history bundle
+
+resources:
+  timeout: 4h
+
+agent:
+  adapter: claude-code
+
+questions:
+  mode: wait # pause on an agent question; resolve with `krayt answer`
+
+network:
+  mode: allowlist
+  allow:
+    - api.anthropic.com # Claude Code — credential scoped by the adapter (see below)
+    - api.github.com # gh CLI — credential scoped by network.inject below
+    - proxy.golang.org # Go module proxy
+    - sum.golang.org # Go checksum db
+    - storage.googleapis.com # Go module blob downloads
+    - cache.nixos.org # Nix binary cache (vendorHash regen)
+    - github.com # Nix flake inputs
+    - codeload.github.com # Nix flake input tarballs
+    - raw.githubusercontent.com
+    - registry.hub.docker.com
+    - registry-1.docker.io
+    - index.docker.io
+    # Azure Blob storage is per-ACCOUNT: every request goes to <account>.blob.core.windows.net and
+    # nothing ever carries the bare apex, so an exact entry would be a rule no request can match —
+    # the silently-ineffective allowlist entry pre-flight exists to refuse. Only a suffix rule can
+    # name this host family at all (support-wildcard-network-hosts.md). It covers every tenant
+    # account, which is the documented cost of a wildcard: krayt keeps no public-suffix list, so
+    # breadth is the operator's to review — the pre-boot policy print calls the entry out by name.
+    - '*.blob.core.windows.net' # container-registry blob layers served out of Azure storage
+
+  # Every host krayt substitutes a credential into is intercepted by construction the moment any
+  # secret is declared (msb turns on TLS interception for the whole sandbox); everything else stays
+  # tunneled rather than intercepted, so go, nix, and git/libcurl keep verifying the real upstream
+  # chain against their own trust store.
+  passthrough:
+    - proxy.golang.org
+    - sum.golang.org
+    - storage.googleapis.com
+    - cache.nixos.org
+    - github.com
+    - codeload.github.com
+    - raw.githubusercontent.com
+    - registry.hub.docker.com
+    - registry-1.docker.io
+    - index.docker.io
+    # Wildcards work identically on --tls-bypass, so per-account storage traffic stays tunneled
+    # rather than intercepted, like every other non-credential host in this list. Without it, any
+    # secret declared anywhere in the run would put msb's interception CA in front of these
+    # requests and break any client that uses its own trust store.
+    - '*.blob.core.windows.net'
+
+  # api.anthropic.com deliberately has NO rule here. With `agent.adapter: claude-code`, the adapter
+  # scopes its selected credential (whichever one secrets.env actually holds) to that host itself.
+  # Hand-writing a rule for that host would override it — user config always wins over an adapter's
+  # (§8.1) — and would need to be kept in sync with which credential secrets.env holds.
+  #
+  # GH_TOKEN, by contrast, has no adapter, so its scope is written out. This makes GH_TOKEN
+  # **required** in secrets.env: pre-flight refuses an inject entry naming a key the secrets file
+  # lacks, rather than starting a run that fails 30s in, unauthenticated.
+  inject:
+    - key: GH_TOKEN
+      host: api.github.com
