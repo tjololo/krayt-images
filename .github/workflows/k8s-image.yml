@@ -95,7 +95,7 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: digests-${{ steps.platform.outputs.slug }}
           path: ${{ runner.temp }}/digests/*
@@ -111,7 +111,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           path: ${{ runner.temp }}/digests
           pattern: digests-*
