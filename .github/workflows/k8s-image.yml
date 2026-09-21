@@ -1,4 +1,6 @@
-# Builds and publishes the k8s toolchain image (k8s/Dockerfile) to GHCR.
+# Builds and publishes the k8s toolchain image (k8s/Dockerfile) to GHCR, for linux/amd64 and
+# linux/arm64. The arm64 image is also what Apple Silicon runs: OCI images have no macOS platform,
+# so Docker Desktop on an M-series Mac (and an msb guest on one) pulls linux/arm64.
 #
 # `paths` keeps this to the image it owns: this repo holds several images, so an unrelated
 # Dockerfile or a README edit must not re-point the `latest` tag here. The workflow file itself is
@@ -15,7 +17,8 @@ on:
 
 concurrency:
   # Serialize per branch: two pushes landing close together would otherwise race for `latest`, and
-  # the winner is whichever build finishes last, not whichever commit is newer.
+  # the winner is whichever build finishes last, not whichever commit is newer. The group covers
+  # both jobs below, so a cancelled run can't leave a half-merged manifest.
   group: k8s-image-${{ github.ref }}
   cancel-in-progress: true
 
@@ -23,13 +26,32 @@ env:
   IMAGE: ghcr.io/tjololo/krayt-images/k8s
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
+  # One job per architecture, each on a runner of that architecture. QEMU would let a single job
+  # build both, but the Dockerfile's `go install` layer (golangci-lint, buf, oras) takes tens of
+  # minutes emulated — native arm64 runners keep it in the same range as amd64, and the two legs
+  # run in parallel. Neither leg tags anything: they push by digest and the merge job assembles the
+  # tags into one manifest list, so `latest` never briefly points at a single-arch image.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write # push to ghcr.io under this repository's namespace
     steps:
       - uses: actions/checkout@v7
+
+      # `linux/amd64` -> `linux-amd64`, for the digest artifact name: `/` is not allowed there.
+      - id: platform
+        run: echo "slug=${PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
+        env:
+          PLATFORM: ${{ matrix.platform }}
 
       - uses: docker/setup-buildx-action@v4
 
@@ -41,6 +63,68 @@ jobs:
           # `packages: write` above — no PAT to store or rotate.
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only for the OCI labels the per-arch images carry — no `tags:`, since this leg pushes by
+      # digest and the merge job owns every tag.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: k8s
+          file: k8s/Dockerfile
+          platforms: ${{ matrix.platform }}
+          # Push by digest only: no tags, and `push-by-digest` keeps this leg from claiming a tag
+          # the manifest list owns. The merge job reads the digest back out of the registry.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Labels still belong on each child image; the tags come from the merge job's metadata.
+          labels: ${{ steps.meta.outputs.labels }}
+          # Scope the cache per arch, otherwise the two legs share one key and each overwrites the
+          # other's layers — every run would then be a cold build for whichever finishes second.
+          cache-from: type=gha,scope=${{ steps.platform.outputs.slug }}
+          cache-to: type=gha,mode=max,scope=${{ steps.platform.outputs.slug }}
+
+      # The digest is all the merge job needs; pass it as a file named after the digest so the two
+      # legs' artifacts merge into one directory without colliding.
+      - name: Export digest
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: digests-${{ steps.platform.outputs.slug }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assembles the per-arch digests into one manifest list and applies the tags. This is the only
+  # job that writes a tag, so `latest` flips once, atomically, to an index carrying both arches.
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -50,16 +134,14 @@ jobs:
             type=raw,value=latest
             type=sha,format=short,prefix=
 
-      - uses: docker/build-push-action@v7
-        with:
-          context: k8s
-          file: k8s/Dockerfile
-          # amd64 only. The Dockerfile is arch-aware and builds for arm64 too, but under QEMU the
-          # `go install` layer takes tens of minutes; add linux/arm64 here (plus
-          # docker/setup-qemu-action, or an arm runner) when something actually needs it.
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}") \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}

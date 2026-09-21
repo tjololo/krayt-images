@@ -5,6 +5,15 @@ A krayt agent image with a Kubernetes/GitOps toolchain on top of
 (client **and** daemon). Published to `ghcr.io/tjololo/krayt-images/k8s` by
 [`.github/workflows/k8s-image.yml`](../.github/workflows/k8s-image.yml).
 
+## Architectures
+
+Published as a manifest list covering **`linux/amd64`** and **`linux/arm64`**;
+a pull resolves to the right one with no tag suffix. `linux/arm64` is also what
+Apple Silicon uses — OCI images have no macOS platform, so Docker Desktop on an
+M-series Mac runs the arm64 image in its Linux VM, as does an msb guest there.
+Each arch builds on a runner of its own architecture, because the `go install`
+layer takes tens of minutes under QEMU emulation.
+
 ## Starting the Docker daemon
 
 `kind` is a client for a container runtime and provides none itself, so a daemon
