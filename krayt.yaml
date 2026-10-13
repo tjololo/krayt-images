@@ -23,10 +23,10 @@
 # guest env var to its default placeholder itself the moment `network.inject` names it.
 # `task:` is intentionally omitted so you always pass --task per run.
 
-image: ghcr.io/tjololo/krayt-images/k8s:5276e18
+image: ghcr.io/tjololo/krayt-images/k8s:39148a1
 
 env:
-  CLAUDE_MODEL: claude-sonnet-5
+  CLAUDE_MODEL: claude-sonnet-5-5
   CLAUDE_EFFORT: high
   # Uncomment for a task that needs verbatim command output — a vendorHash `got: sha256-…`, a full
   # test failure, a filesystem check the agent will branch on (hack/krayt-dev/README.md).
