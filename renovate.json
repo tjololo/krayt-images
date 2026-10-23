@@ -2,5 +2,38 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "description": "Tool versions pinned as Dockerfile ARGs, each annotated with a `# renovate:` comment on the line above",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\s+ARG \\w+=(?<currentValue>\\S+)"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver-coerced{{/if}}",
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{/if}}"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Digest-pin the base image so a re-pointed tag can't change it silently (see the FROM comment in k8s/Dockerfile)",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "pinDigests": true
+    },
+    {
+      "description": "kubectl and the envtest binaries track the same Kubernetes release; bump them together",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "kubernetes/kubernetes"
+      ],
+      "groupName": "kubernetes"
+    }
   ]
 }
