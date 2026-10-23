@@ -36,36 +36,98 @@ FROM ghcr.io/418-cloud/krayt-agent-claude-code:2.1.287
 # independently of the base image tag. `make proto` (Nix) stays the source of truth for the
 # *committed* generated code; this toolchain is only for an agent regenerating it mid-run
 # (see proto-direct.sh) when it edits internal/protocol/krayt.proto.
+# renovate: datasource=golang-version depName=go
 ARG GO_VERSION=1.26.3
+# renovate: datasource=github-releases depName=protocolbuffers/protobuf extractVersion=^v(?<version>.*)$
 ARG PROTOC_VERSION=35.1
+# renovate: datasource=go depName=google.golang.org/protobuf
 ARG PROTOC_GEN_GO_VERSION=v1.36.11
+# renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
 ARG PROTOC_GEN_GO_GRPC_VERSION=v1.6.2
+# renovate: datasource=go depName=github.com/bufbuild/buf
 ARG BUF_VERSION=v1.71.0
+# renovate: datasource=go depName=oras.land/oras
 ARG ORAS_VERSION=v1.3.2
-ARG GOLANGCI_LINT_VERSION=v2.12.2
+# renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
+ARG GOLANGCI_LINT_VERSION=v2.15.0
+# renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
 ARG GH_CLI_VERSION=2.96.0
+# renovate: datasource=github-releases depName=hadolint/hadolint extractVersion=^v(?<version>.*)$
 ARG HADOLINT_VERSION=2.15.1
+# renovate: datasource=github-releases depName=fluxcd/flux2 extractVersion=^v(?<version>.*)$
 ARG FLUX_VERSION=2.9.5
+# renovate: datasource=github-releases depName=kubernetes-sigs/kustomize extractVersion=^kustomize/v(?<version>.*)$
 ARG KUSTOMIZE_VERSION=5.8.1
+# renovate: datasource=github-releases depName=kubernetes-sigs/kind extractVersion=^v(?<version>.*)$
 ARG KIND_VERSION=0.33.0
+# renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.0
+# renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.*)$
 ARG DOCKER_VERSION=29.8.0
+# Operator (kubebuilder) toolchain. ENVTEST_K8S_VERSION tracks KUBECTL_VERSION, and both track the
+# k8s.io/api minor that KUBEBUILDER_VERSION scaffolds into a new project's go.mod.
+# renovate: datasource=github-releases depName=kubernetes-sigs/kubebuilder extractVersion=^v(?<version>.*)$
+ARG KUBEBUILDER_VERSION=4.16.0
+# renovate: datasource=go depName=sigs.k8s.io/controller-tools
+ARG CONTROLLER_TOOLS_VERSION=v0.23.0
+# renovate: datasource=go depName=sigs.k8s.io/controller-runtime/tools/setup-envtest
+ARG SETUP_ENVTEST_VERSION=v0.25.2
+# renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
+ARG ENVTEST_K8S_VERSION=1.37.0
+# renovate: datasource=go depName=github.com/onsi/ginkgo/v2
+ARG GINKGO_VERSION=v2.33.1
+# renovate: datasource=go depName=go.uber.org/mock
+ARG MOCKGEN_VERSION=v0.6.0
+# renovate: datasource=go depName=gotest.tools/gotestsum
+ARG GOTESTSUM_VERSION=v1.13.0
+# renovate: datasource=go depName=github.com/go-delve/delve
+ARG DELVE_VERSION=v1.27.2
+# renovate: datasource=go depName=golang.org/x/vuln
+ARG GOVULNCHECK_VERSION=v1.9.0
+# renovate: datasource=go depName=golang.org/x/tools
+ARG GOIMPORTS_VERSION=v0.52.0
+# renovate: datasource=go depName=mvdan.cc/gofumpt
+ARG GOFUMPT_VERSION=v0.12.0
+# renovate: datasource=go depName=mvdan.cc/sh/v3
+ARG SHFMT_VERSION=v3.14.1
+# renovate: datasource=go depName=github.com/elastic/crd-ref-docs
+ARG CRD_REF_DOCS_VERSION=v0.3.0
+# renovate: datasource=github-releases depName=helm/helm extractVersion=^v(?<version>.*)$
+ARG HELM_VERSION=4.3.1
+# renovate: datasource=github-releases depName=docker/buildx extractVersion=^v(?<version>.*)$
+ARG BUILDX_VERSION=0.38.1
+# renovate: datasource=github-releases depName=yannh/kubeconform extractVersion=^v(?<version>.*)$
+ARG KUBECONFORM_VERSION=0.8.0
+# renovate: datasource=github-releases depName=stackrox/kube-linter extractVersion=^v(?<version>.*)$
+ARG KUBE_LINTER_VERSION=0.8.3
+# renovate: datasource=github-releases depName=kyverno/chainsaw extractVersion=^v(?<version>.*)$
+ARG CHAINSAW_VERSION=0.2.15
+# renovate: datasource=github-releases depName=aquasecurity/trivy extractVersion=^v(?<version>.*)$
+ARG TRIVY_VERSION=0.76.1
+# renovate: datasource=github-releases depName=mikefarah/yq extractVersion=^v(?<version>.*)$
+ARG YQ_VERSION=4.54.1
 
 # The base image is debian:trixie-slim + `ca-certificates curl git bash`; these are what krayt's
 # toolchain needs on top. gcc + libc6-dev are not optional: `go test -race` requires cgo, so
 # without a C toolchain the race detector — which CI and every dogfooding task run — fails to
 # link. unzip: protoc's release archive is a zip. xz-utils: the Nix installer's tarball is .tar.xz.
+# make: every kubebuilder project is driven through its scaffolded Makefile (`make generate
+# manifests test lint`), and the base has no make. jq for JSON in scripts and Makefiles.
+# shellcheck and yamllint lint the hack/ scripts and the YAML under config/ — both are distro
+# packages with no release cadence worth pinning separately.
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends gcc libc6-dev unzip xz-utils \
+      make jq shellcheck yamllint \
  && rm -rf /var/lib/apt/lists/*
 
 # The Go toolchain, fetched as the official prebuilt tarball like protoc/gh/hadolint below — the
 # base image is an agent image, not a language image, so Go is just another tool this one adds.
 # Go's asset arch names ARE Docker's TARGETARCH values verbatim (amd64/arm64), like gh's.
 # GO_VERSION must stay >= go.mod's `go` directive: with GOTOOLCHAIN=local (below) a lower one
-# fails the build outright rather than silently downloading a second toolchain. Renovate's
-# `go version` group bumps this ARG and that directive together (renovate.json).
+# fails the build outright rather than silently downloading a second toolchain. That holds for the
+# `go install`ed tools below too: a tool bump whose go.mod needs a newer Go fails here until
+# Renovate's golang-version PR for this ARG lands first.
 ARG TARGETARCH
 RUN curl -fsSL -o /tmp/go.tar.gz \
       "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" \
@@ -187,6 +249,85 @@ RUN set -eu; \
 RUN groupadd --system docker \
  && usermod --append --groups docker agent
 
+# docker buildx, as a CLI plugin: the static bundle above ships the classic builder only, and
+# kubebuilder's scaffolded `make docker-buildx` (the multi-arch manager image) calls `docker buildx`.
+# A bare binary with TARGETARCH arch names; /usr/local/lib/docker/cli-plugins is on the CLI's
+# system-wide plugin search path, so every user picks it up without a ~/.docker of its own.
+RUN set -eu; \
+    mkdir -p /usr/local/lib/docker/cli-plugins; \
+    curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-buildx \
+      "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-${TARGETARCH}" \
+ && chmod 0755 /usr/local/lib/docker/cli-plugins/docker-buildx
+
+# kubebuilder itself — scaffolds projects, APIs, webhooks and plugins (`kubebuilder init`,
+# `create api`, `create webhook`, `edit --plugins helm/v2-alpha`). Bare binary, TARGETARCH names.
+RUN set -eu; \
+    curl -fsSL -o /usr/local/bin/kubebuilder \
+      "https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${KUBEBUILDER_VERSION}/kubebuilder_linux_${TARGETARCH}" \
+ && chmod 0755 /usr/local/bin/kubebuilder
+
+# helm, for the chart kubebuilder's helm plugin generates under dist/chart (`helm lint`,
+# `helm template`, installing it into kind). Served from get.helm.sh, not the GitHub release, which
+# carries no binaries; arch names are TARGETARCH verbatim, inside a linux-<arch>/ directory.
+RUN set -eu; \
+    curl -fsSL -o /tmp/helm.tar.gz \
+      "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${TARGETARCH}.tar.gz" \
+ && tar -xzf /tmp/helm.tar.gz -C /tmp "linux-${TARGETARCH}/helm" \
+ && install -m 0755 "/tmp/linux-${TARGETARCH}/helm" /usr/local/bin/helm \
+ && rm -rf /tmp/helm.tar.gz "/tmp/linux-${TARGETARCH}"
+
+# kubeconform validates rendered manifests (`kustomize build config/default | kubeconform`) against
+# the upstream schemas, and against the operator's own CRDs once converted to JSON schema.
+RUN set -eu; \
+    curl -fsSL -o /tmp/kubeconform.tar.gz \
+      "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-${TARGETARCH}.tar.gz" \
+ && tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform \
+ && install -m 0755 /tmp/kubeconform /usr/local/bin/kubeconform \
+ && rm -f /tmp/kubeconform.tar.gz /tmp/kubeconform
+
+# kube-linter checks the same manifests for security and reliability problems (privileged
+# containers, missing probes and limits, RBAC wildcards) — kubeconform checks shape, this checks
+# judgement. Bare binary whose amd64 asset carries no arch suffix at all.
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+      amd64) kube_linter_asset=kube-linter-linux ;; \
+      arm64) kube_linter_asset=kube-linter-linux_arm64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/kube-linter \
+      "https://github.com/stackrox/kube-linter/releases/download/v${KUBE_LINTER_VERSION}/${kube_linter_asset}" \
+ && chmod 0755 /usr/local/bin/kube-linter
+
+# chainsaw — declarative end-to-end tests for operators (apply, assert on status, clean up),
+# run against a kind cluster as a complement to kubebuilder's Ginkgo-based test/e2e suite.
+RUN set -eu; \
+    curl -fsSL -o /tmp/chainsaw.tar.gz \
+      "https://github.com/kyverno/chainsaw/releases/download/v${CHAINSAW_VERSION}/chainsaw_linux_${TARGETARCH}.tar.gz" \
+ && tar -xzf /tmp/chainsaw.tar.gz -C /tmp chainsaw \
+ && install -m 0755 /tmp/chainsaw /usr/local/bin/chainsaw \
+ && rm -f /tmp/chainsaw.tar.gz /tmp/chainsaw
+
+# trivy scans the manager image, the Go module graph, and the rendered manifests (`trivy image`,
+# `trivy fs`, `trivy config`) and emits SBOMs. Arch names are its own (64bit/ARM64).
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+      amd64) trivy_arch=64bit ;; \
+      arm64) trivy_arch=ARM64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/trivy.tar.gz \
+      "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${trivy_arch}.tar.gz" \
+ && tar -xzf /tmp/trivy.tar.gz -C /tmp trivy \
+ && install -m 0755 /tmp/trivy /usr/local/bin/trivy \
+ && rm -f /tmp/trivy.tar.gz /tmp/trivy
+
+# yq, for editing the YAML under config/ in place (kustomizations, patches, CRD samples) the way
+# jq does JSON. Bare binary, TARGETARCH names.
+RUN set -eu; \
+    curl -fsSL -o /usr/local/bin/yq \
+      "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${TARGETARCH}" \
+ && chmod 0755 /usr/local/bin/yq
+
 # Back to the base image's non-root `agent` user for everything below, so it owns its own Go/lint
 # caches (see ENV block). The user, its home, and the Claude Code CLI all come from the base.
 USER agent
@@ -220,6 +361,36 @@ RUN --mount=type=cache,target=/home/agent/.cache/go-build,uid=1000,gid=1000 \
  && go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@${PROTOC_GEN_GO_GRPC_VERSION}" \
  && go install "github.com/bufbuild/buf/cmd/buf@${BUF_VERSION}" \
  && go install "oras.land/oras/cmd/oras@${ORAS_VERSION}"
+
+# The operator toolchain that installs the same way: controller-gen (CRDs, RBAC, webhooks,
+# DeepCopy), setup-envtest, the ginkgo CLI (kubebuilder's test/e2e suite is Ginkgo), mockgen,
+# gotestsum, delve, govulncheck, the formatters golangci-lint's own `fmt` doesn't replace for
+# editor-style use (goimports, gofumpt, shfmt), and crd-ref-docs for API reference docs. A
+# scaffolded Makefile still `go install`s its own pinned controller-gen/setup-envtest/golangci-lint
+# into ./bin; these are for running them directly, and they share this layer's warm GOCACHE.
+RUN --mount=type=cache,target=/home/agent/.cache/go-build,uid=1000,gid=1000 \
+    go install "sigs.k8s.io/controller-tools/cmd/controller-gen@${CONTROLLER_TOOLS_VERSION}" \
+ && go install "sigs.k8s.io/controller-runtime/tools/setup-envtest@${SETUP_ENVTEST_VERSION}" \
+ && go install "github.com/onsi/ginkgo/v2/ginkgo@${GINKGO_VERSION}" \
+ && go install "go.uber.org/mock/mockgen@${MOCKGEN_VERSION}" \
+ && go install "gotest.tools/gotestsum@${GOTESTSUM_VERSION}" \
+ && go install "github.com/go-delve/delve/cmd/dlv@${DELVE_VERSION}" \
+ && go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" \
+ && go install "golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}" \
+ && go install "mvdan.cc/gofumpt@${GOFUMPT_VERSION}" \
+ && go install "mvdan.cc/sh/v3/cmd/shfmt@${SHFMT_VERSION}" \
+ && go install "github.com/elastic/crd-ref-docs@${CRD_REF_DOCS_VERSION}"
+
+# envtest's kube-apiserver + etcd, fetched at build time into setup-envtest's default store
+# (~/.local/share/kubebuilder-envtest). setup-envtest downloads them from GitHub release assets,
+# which redirect to a host krayt.yaml's allowlist does not carry, so a run cannot fetch them
+# itself. The `current` symlink gives KUBEBUILDER_ASSETS (ENV below) one arch-independent path for
+# a bare `go test ./...` or `ginkgo`. The scaffolded `make test` ignores it — it resolves its own
+# from ./bin/k8s — so README.md shows how to point that at this store instead.
+RUN set -eu; \
+    assets="$(setup-envtest use "${ENVTEST_K8S_VERSION}" -p path)"; \
+    ln -s "${assets}" /home/agent/.local/share/kubebuilder-envtest/current
+ENV KUBEBUILDER_ASSETS=/home/agent/.local/share/kubebuilder-envtest/current
 
 # Model + reasoning-effort defaults for this image, read by the base entrypoint's optional
 # selection branch (those are `claude` flags, and the base is the image that ships `claude`).

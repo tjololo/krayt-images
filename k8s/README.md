@@ -1,8 +1,10 @@
 # `k8s` image
 
-A krayt agent image with a Kubernetes/GitOps toolchain on top of
-`krayt-agent-claude-code`: `flux`, `kustomize`, `kubectl`, `kind`, and Docker
-(client **and** daemon). Published to `ghcr.io/tjololo/krayt-images/k8s` by
+A krayt agent image with a Kubernetes/GitOps and operator-development toolchain
+on top of `krayt-agent-claude-code`: `flux`, `kustomize`, `kubectl`, `kind`,
+Docker (client **and** daemon, plus `buildx`), and everything needed to build,
+test, lint and scan a [kubebuilder](https://book.kubebuilder.io) operator — see
+[Operator development](#operator-development). Published to `ghcr.io/tjololo/krayt-images/k8s` by
 [`.github/workflows/k8s-image.yml`](../.github/workflows/k8s-image.yml).
 
 ## Architectures
@@ -77,6 +79,43 @@ netfilter, and overlayfs mounts — plus `--user 0`, since the image defaults to
 `/var/run/docker.sock` is detected and reused, and entering as `agent` degrades
 to a warning rather than a failed boot.
 
+## Operator development
+
+| Purpose | Tools |
+| --- | --- |
+| Scaffolding & codegen | `kubebuilder`, `controller-gen`, `make`, `protoc` + `buf` |
+| Testing | `go test -race`, `setup-envtest` (+ pre-fetched envtest binaries), `ginkgo`, `gotestsum`, `mockgen`, `chainsaw`, `kind`, `dlv` |
+| Linting | `golangci-lint`, `kube-linter`, `kubeconform`, `hadolint`, `shellcheck`, `yamllint`, `helm lint` |
+| Formatting | `gofmt`, `goimports`, `gofumpt`, `shfmt` |
+| Scanning | `govulncheck`, `trivy` (image, fs, config, SBOM) |
+| Packaging & docs | `docker buildx`, `helm`, `kustomize`, `oras`, `crd-ref-docs`, `yq`, `jq` |
+
+### envtest binaries
+
+envtest's `kube-apiserver` and `etcd` (Kubernetes `ENVTEST_K8S_VERSION`) are
+fetched at build time, because `setup-envtest` downloads them from GitHub
+release assets, a host `krayt.yaml`'s allowlist does not carry.
+`KUBEBUILDER_ASSETS` points at them, so `go test ./...` and `ginkgo` work as-is.
+
+A scaffolded `make test` resolves its own path from `./bin/k8s` instead and
+would try to download. Point it at the image's copy:
+
+```sh
+mkdir -p bin && ln -sfn ~/.local/share/kubebuilder-envtest/k8s bin/k8s
+make test ENVTEST_K8S_VERSION=1.37.0   # concrete version: no remote lookup
+```
+
+The Makefile's other tools (`controller-gen`, `kustomize`, `golangci-lint`,
+`setup-envtest`) are `go install`ed into `./bin` through `proxy.golang.org`,
+which the allowlist does permit.
+
+### Not reachable from a run by default
+
+`make test-e2e` and `make docker-build` need more egress than `krayt.yaml`
+allows: the manager's Dockerfile pulls `gcr.io/distroless/static`, and the e2e
+suite installs cert-manager and Prometheus Operator from GitHub release assets.
+Add those hosts to the run's allowlist for tasks that need them.
+
 ## Not included
 
 - **`msb` itself.** This image is a microsandbox *guest*, not a host, so it
@@ -89,4 +128,7 @@ to a warning rather than a failed boot.
 
 Tool versions are pinned as `ARG`s at the top of the
 [`Dockerfile`](Dockerfile) so they can be bumped independently of the base
-image tag. `kubectl` should stay within one minor of the clusters it talks to.
+image tag. Each `ARG` carries a `# renovate:` comment naming its datasource, which
+the custom regex manager in [`renovate.json`](../renovate.json) reads to open
+bump PRs; a new tool `ARG` needs that comment too, or Renovate never sees it.
+`kubectl` should stay within one minor of the clusters it talks to.

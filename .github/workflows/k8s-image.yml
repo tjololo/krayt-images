@@ -27,7 +27,7 @@ env:
 
 jobs:
   # One job per architecture, each on a runner of that architecture. QEMU would let a single job
-  # build both, but the Dockerfile's `go install` layer (golangci-lint, buf, oras) takes tens of
+  # build both, but the Dockerfile's `go install` layers (golangci-lint, buf, controller-gen, …) takes tens of
   # minutes emulated — native arm64 runners keep it in the same range as amd64, and the two legs
   # run in parallel. Neither leg tags anything: they push by digest and the merge job assembles the
   # tags into one manifest list, so `latest` never briefly points at a single-arch image.
