@@ -41,7 +41,7 @@ ARG GO_VERSION=1.26.3
 # renovate: datasource=github-releases depName=protocolbuffers/protobuf extractVersion=^v(?<version>.*)$
 ARG PROTOC_VERSION=35.1
 # renovate: datasource=go depName=google.golang.org/protobuf
-ARG PROTOC_GEN_GO_VERSION=v1.36.11
+ARG PROTOC_GEN_GO_VERSION=v1.36.12
 # renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
 ARG PROTOC_GEN_GO_GRPC_VERSION=v1.6.2
 # renovate: datasource=go depName=github.com/bufbuild/buf
