@@ -1,0 +1,3 @@
+env:
+  CLAUDE_MODEL: claude-opus-5-5
+  CLAUDE_EFFORT: medium
