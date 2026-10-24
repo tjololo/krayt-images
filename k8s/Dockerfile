@@ -63,7 +63,7 @@ ARG KIND_VERSION=0.33.0
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
 ARG KUBECTL_VERSION=1.37.0
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.*)$
-ARG DOCKER_VERSION=29.8.0
+ARG DOCKER_VERSION=29.9.2
 # Operator (kubebuilder) toolchain. ENVTEST_K8S_VERSION tracks KUBECTL_VERSION, and both track the
 # k8s.io/api minor that KUBEBUILDER_VERSION scaffolds into a new project's go.mod.
 # renovate: datasource=github-releases depName=kubernetes-sigs/kubebuilder extractVersion=^v(?<version>.*)$
