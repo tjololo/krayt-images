@@ -37,7 +37,7 @@ FROM ghcr.io/418-cloud/krayt-agent-claude-code:2.1.309
 # *committed* generated code; this toolchain is only for an agent regenerating it mid-run
 # (see proto-direct.sh) when it edits internal/protocol/krayt.proto.
 # renovate: datasource=golang-version depName=go
-ARG GO_VERSION=1.26.3
+ARG GO_VERSION=1.27.3
 # renovate: datasource=github-releases depName=protocolbuffers/protobuf extractVersion=^v(?<version>.*)$
 ARG PROTOC_VERSION=35.1
 # renovate: datasource=go depName=google.golang.org/protobuf
