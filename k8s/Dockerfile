@@ -61,7 +61,7 @@ ARG KUSTOMIZE_VERSION=5.8.1
 # renovate: datasource=github-releases depName=kubernetes-sigs/kind extractVersion=^v(?<version>.*)$
 ARG KIND_VERSION=0.33.0
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
-ARG KUBECTL_VERSION=1.37.0
+ARG KUBECTL_VERSION=1.37.2
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.*)$
 ARG DOCKER_VERSION=29.8.0
 # Operator (kubebuilder) toolchain. ENVTEST_K8S_VERSION tracks KUBECTL_VERSION, and both track the
@@ -73,7 +73,7 @@ ARG CONTROLLER_TOOLS_VERSION=v0.23.0
 # renovate: datasource=go depName=sigs.k8s.io/controller-runtime/tools/setup-envtest
 ARG SETUP_ENVTEST_VERSION=v0.25.2
 # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>.*)$
-ARG ENVTEST_K8S_VERSION=1.37.0
+ARG ENVTEST_K8S_VERSION=1.37.2
 # renovate: datasource=go depName=github.com/onsi/ginkgo/v2
 ARG GINKGO_VERSION=v2.33.1
 # renovate: datasource=go depName=go.uber.org/mock
