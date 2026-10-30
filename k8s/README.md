@@ -6,6 +6,7 @@ Docker (client **and** daemon, plus `buildx`), and everything needed to build,
 test, lint and scan a [kubebuilder](https://book.kubebuilder.io) operator — see
 [Operator development](#operator-development). Published to `ghcr.io/tjololo/krayt-images/k8s` by
 [`.github/workflows/k8s-image.yml`](../.github/workflows/k8s-image.yml).
+Also includes Terraform and TFLint for [Terraform development](#terraform-development).
 
 ## Architectures
 
@@ -115,6 +116,34 @@ which the allowlist does permit.
 allows: the manager's Dockerfile pulls `gcr.io/distroless/static`, and the e2e
 suite installs cert-manager and Prometheus Operator from GitHub release assets.
 Add those hosts to the run's allowlist for tasks that need them.
+
+## Terraform development
+
+The image includes `terraform` (formatting, validation, plans, and native
+`.tftest.hcl` tests) and `tflint` (linting with its bundled Terraform ruleset).
+The existing `trivy config` scanner also checks Terraform for security
+misconfigurations; no separate scanner is needed.
+
+Run these commands from a Terraform module directory as the normal `agent` user:
+
+```sh
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
+terraform test
+tflint --init
+tflint
+trivy config .
+```
+
+`terraform init` downloads the module's providers and remote modules;
+`-backend=false` skips remote backend initialization for local validation and
+tests. Use normal `terraform init` when a plan needs the configured backend.
+`tflint --init` installs any plugins declared in the project's `.tflint.hcl`.
+Allow the provider/module registries, plugin release hosts, and Trivy check
+downloads through the sandbox's egress policy as needed. Provider-backed tests
+also need credentials and API access and may create billable resources; use
+mock providers for offline tests.
 
 ## Not included
 

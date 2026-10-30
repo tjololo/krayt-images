@@ -106,6 +106,10 @@ ARG CHAINSAW_VERSION=0.2.15
 ARG TRIVY_VERSION=0.76.1
 # renovate: datasource=github-releases depName=mikefarah/yq extractVersion=^v(?<version>.*)$
 ARG YQ_VERSION=4.54.1
+# renovate: datasource=github-releases depName=hashicorp/terraform extractVersion=^v(?<version>.*)$
+ARG TERRAFORM_VERSION=1.17.1
+# renovate: datasource=github-releases depName=terraform-linters/tflint extractVersion=^v(?<version>.*)$
+ARG TFLINT_VERSION=0.65.0
 
 # The base image is debian:trixie-slim + `ca-certificates curl git bash`; these are what krayt's
 # toolchain needs on top. gcc + libc6-dev are not optional: `go test -race` requires cgo, so
@@ -327,6 +331,35 @@ RUN set -eu; \
     curl -fsSL -o /usr/local/bin/yq \
       "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_${TARGETARCH}" \
  && chmod 0755 /usr/local/bin/yq
+
+# Terraform includes fmt, validate, and the native test runner. Both release archives use
+# TARGETARCH verbatim; verify the selected archive against the upstream checksum manifest.
+RUN set -eu; \
+    mkdir -p /tmp/terraform; \
+    cd /tmp/terraform; \
+    curl -fsSL -o terraform.zip \
+      "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip" \
+ && curl -fsSL -o checksums.txt \
+      "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" \
+ && grep " terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}\\.zip$" checksums.txt \
+      | sed 's/terraform_.*\.zip$/terraform.zip/' | sha256sum -c - \
+ && unzip -q terraform.zip terraform \
+ && install -m 0755 terraform /usr/local/bin/terraform \
+ && rm -rf /tmp/terraform
+
+# TFLint ships its Terraform ruleset in the binary; provider-specific plugins are project-owned.
+RUN set -eu; \
+    mkdir -p /tmp/tflint; \
+    cd /tmp/tflint; \
+    curl -fsSL -o tflint.zip \
+      "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_${TARGETARCH}.zip" \
+ && curl -fsSL -o checksums.txt \
+      "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/checksums.txt" \
+ && grep " tflint_linux_${TARGETARCH}\\.zip$" checksums.txt \
+      | sed 's/tflint_linux_.*\.zip$/tflint.zip/' | sha256sum -c - \
+ && unzip -q tflint.zip tflint \
+ && install -m 0755 tflint /usr/local/bin/tflint \
+ && rm -rf /tmp/tflint
 
 # Back to the base image's non-root `agent` user for everything below, so it owns its own Go/lint
 # caches (see ENV block). The user, its home, and the Claude Code CLI all come from the base.
