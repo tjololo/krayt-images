@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1 # renovate: ignore
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e # renovate: ignore
 # krayt-dev — the dogfooding agent image: krayt's own dev toolchain layered on the published
 # Claude Code agent image, so an agent running `krayt run --image krayt-dev --agent claude-code`
 # against krayt's own repo can build, test, lint, and regenerate protocol code inside the sandbox
@@ -30,7 +30,7 @@
 # arrive here (see dev-image.yml's `paths` comment). Renovate's dockerfile manager appends and
 # maintains the digest (`pinDigests: true`, renovate.json) — the line is tag-only until its first
 # PR lands, which is tracked in HUMAN_TODO.md.
-FROM ghcr.io/418-cloud/krayt-agent-claude-code:2.1.309
+FROM ghcr.io/418-cloud/krayt-agent-claude-code:2.1.309@sha256:068b2e650a421dd55e6f93d2ea9703ea2d45cc864df95177018b8051913b138e
 
 # Tool versions, pinned so Renovate's custom regex manager (renovate.json) can bump them
 # independently of the base image tag. `make proto` (Nix) stays the source of truth for the
