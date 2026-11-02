@@ -51,7 +51,7 @@ ARG ORAS_VERSION=v1.3.2
 # renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
 ARG GOLANGCI_LINT_VERSION=v2.15.0
 # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
-ARG GH_CLI_VERSION=2.96.0
+ARG GH_CLI_VERSION=2.103.3
 # renovate: datasource=github-releases depName=hadolint/hadolint extractVersion=^v(?<version>.*)$
 ARG HADOLINT_VERSION=2.15.1
 # renovate: datasource=github-releases depName=fluxcd/flux2 extractVersion=^v(?<version>.*)$
