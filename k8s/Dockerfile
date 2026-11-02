@@ -47,7 +47,7 @@ ARG PROTOC_GEN_GO_GRPC_VERSION=v1.6.2
 # renovate: datasource=go depName=github.com/bufbuild/buf
 ARG BUF_VERSION=v1.71.0
 # renovate: datasource=go depName=oras.land/oras
-ARG ORAS_VERSION=v1.3.2
+ARG ORAS_VERSION=v1.3.6
 # renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
 ARG GOLANGCI_LINT_VERSION=v2.15.0
 # renovate: datasource=github-releases depName=cli/cli extractVersion=^v(?<version>.*)$
