@@ -45,7 +45,7 @@ ARG PROTOC_GEN_GO_VERSION=v1.36.11
 # renovate: datasource=go depName=google.golang.org/grpc/cmd/protoc-gen-go-grpc
 ARG PROTOC_GEN_GO_GRPC_VERSION=v1.6.2
 # renovate: datasource=go depName=github.com/bufbuild/buf
-ARG BUF_VERSION=v1.71.0
+ARG BUF_VERSION=v1.75.0
 # renovate: datasource=go depName=oras.land/oras
 ARG ORAS_VERSION=v1.3.2
 # renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
